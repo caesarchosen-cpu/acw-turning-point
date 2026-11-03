@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#5c5240" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="favicon.ico" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<title>American Civil War Turning Point</title>
+<style>
+  :root {
+    --ink: #e0d3b8; /* parchment ink, slightly less white */
+    --muted: #b0a890;
+    --panel: rgba(14, 18, 12, 0.9);
+    --gold: #c4a35a;
+    --union: #1e5aaf; /* dark Union blue */
+    --confed: #a84838;
+    --border: rgba(196, 163, 90, 0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #6e634e; color: var(--ink); /* was blue/gray split gradient */
+    font-family: "Segoe UI", system-ui, sans-serif; user-select: none; }
+  #game { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: default; background: #8a7d65; position: relative; z-index: 1; }
+  #selectBox {
+    position: fixed; border: 1px solid rgba(196, 163, 90, 0.95);
+    background: rgba(196, 163, 90, 0.12); pointer-events: none; display: none; z-index: 5;
+  }
+  #menu {
+    position: fixed; inset: 0; z-index: 50;
+    background: #5c5240; /* period brown panel; was blue/gray split */
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    gap: 18px; text-align: center; padding: 24px;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  #menu .menuBody { display: flex; flex-direction: column; align-items: center; gap: 18px; flex: 1 1 auto; justify-content: center; width: 100%; }
+  #menu.hidden { display: none; }
+  #menu h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(28px, 4vw, 42px); color: #f3e6c0; letter-spacing: .06em;
+    font-weight: 400;
+  }
+  #menu .sub { color: var(--muted); font-size: 14px; max-width: 420px; line-height: 1.5; }
+  #menu .sideBtns { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+  #menu button {
+    pointer-events: auto; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--border); color: var(--ink);
+    font-size: 16px; padding: 14px 28px; border-radius: 6px; min-width: 220px;
+    transition: background .15s, border-color .15s;
+  }
+  #menu button:hover { border-color: var(--gold); background: rgba(30, 36, 24, 0.95); }
+  #menu button.union { border-color: rgba(90,122,176,.55); }
+  #menu button.union:hover { border-color: #1e5aaf; } /* dark Union blue, not light */
+  #menu button.csa { border-color: rgba(168,72,56,.55); }
+  #menu button.csa:hover { border-color: #c06050; }
+  #menu .menuStartWrap {
+    margin-top: auto; width: min(520px, 100%); padding-top: 20px;
+    display: flex; justify-content: center;
+    position: relative; z-index: 60; pointer-events: auto;
+  }
+  #menu #btnStart {
+    width: min(480px, 100%); min-height: 56px; font-size: 20px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase;
+    background: rgba(40, 36, 22, 0.98); border: 2px solid var(--gold); color: #f3e6c0;
+    border-radius: 8px; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  }
+  #menu #btnStart:hover, #menu #btnStart:focus { background: rgba(60, 52, 28, 0.98); border-color: #e0c878; outline: none; }
+  #menu #btnStart:active { background: rgba(80, 68, 32, 0.98); }
+  #bootError {
+    display: none; position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
+    z-index: 100; max-width: min(560px, 92vw); background: #3a2218; color: #f3e6c0;
+    border: 1px solid #c4a35a; border-radius: 8px; padding: 12px 16px; font-size: 13px;
+    line-height: 1.45; text-align: left; pointer-events: auto;
+  }
+  #bootError.show { display: block; }
+  #bootError code { color: #e0c878; }
+  @media (pointer: coarse) {
+    #menu #btnStart { min-height: 64px; font-size: 22px; }
+  }
+  #hud {
+    position: fixed; inset: 0; pointer-events: none; z-index: 10;
+    display: none; grid-template-rows: auto 1fr auto;
+    padding: 12px 16px; text-shadow: 0 1px 2px rgba(0,0,0,.85);
+  }
+  #hud.visible { display: grid; }
+  .top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 14px; min-width: 140px;
+  }
+  .panel h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .panel .val { font-size: 20px; color: var(--gold); font-weight: 600; }
+  .panel .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  #dayBanner { text-align: center; min-width: 280px; }
+  #dayBanner .day { font-family: Georgia, serif; font-size: 18px; color: #f3e6c0; letter-spacing: .04em; }
+  #dayBanner .obj { font-size: 12px; color: var(--muted); margin-top: 4px; max-width: 360px; margin-left: auto; margin-right: auto; }
+  #help { max-width: 300px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+  #help strong { color: var(--ink); }
+  #selectedPanel { justify-self: start; min-width: 280px; max-width: 460px; }
+  #selectedList { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .unitChip {
+    background: rgba(0,0,0,.35); border: 1px solid var(--border);
+    border-radius: 4px; padding: 4px 8px; font-size: 12px;
+  }
+  .unitChip.soldier, .unitChip.infantry { border-color: rgba(90,122,176,.6); }
+  .unitChip.skirmisher { border-color: rgba(58,138,74,.75); }
+  .unitChip.worker, .unitChip.engineer { border-color: rgba(196,163,90,.6); }
+  .unitChip.cavalry { border-color: rgba(107,180,120,.6); }
+  .unitChip.artillery { border-color: rgba(160,140,100,.6); }
+  .unitChip.officer { border-color: rgba(196,163,90,.8); }
+  .unitChip.empty { color: var(--muted); border-style: dashed; }
+  #buildBar button.disabled, #buildBar button:disabled,
+  #actionBar button.disabled, #actionBar button:disabled {
+    opacity: 0.4; cursor: not-allowed; pointer-events: none;
+  }
+  #fireBar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; pointer-events: auto; }
+  #fireBar button, #actionBar button {
+    background: rgba(30,36,24,.95); border: 1px solid var(--border); color: var(--ink);
+    padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  #fireBar button:hover, #actionBar button:hover { border-color: #e0c878; }
+  #actionBar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; pointer-events: auto; align-items: center; }
+  #btnFireMode.active { border-color: var(--gold); color: var(--gold); }
+  #buildBar {
+    margin-top: 8px; display: none; gap: 8px; align-items: center; pointer-events: auto;
+  }
+  #buildBar.visible { display: flex; }
+  #buildBar button {
+    background: rgba(30,36,24,.95); border: 1px solid var(--border); color: var(--ink);
+    padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  #buildBar button.active { border-color: var(--gold); color: var(--gold); }
+  #buildBar button:hover { border-color: #e0c878; }
+  #status {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 4px;
+    padding: 6px 14px; font-size: 12px; color: var(--muted); z-index: 11;
+    display: none;
+  }
+  #status.visible { display: block; }
+  #objProgress.contested {
+    color: #d9b44a !important; /* parchment/amber — was #e8e8e8 */
+    text-shadow: 0 0 3px #111, 0 1px 2px #000, 1px 0 2px #000, -1px 0 2px #000;
+  }
+
+  .split-bg { background: #6e634e !important; /* removed blue/gray split */ }
+  #briefingPanel { background: rgba(40, 34, 24, 0.94) !important; border: 1px solid rgba(196,163,90,.45); }
+
+  /* ---- Touch / mobile HUD ---- */
+  #touchHUD { display: none; position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+  body.touch-ui #touchHUD { display: block; }
+  /* Touch chrome must not cover Start while menu is up */
+  body.touch-ui #menu:not(.hidden) ~ #touchHUD { display: none !important; }
+  body.touch-ui #help { display: none; } /* hide keyboard legend on phones */
+  #touchPad {
+    pointer-events: auto; position: fixed; left: max(12px, env(safe-area-inset-left));
+    bottom: max(18px, env(safe-area-inset-bottom));
+    width: 118px; height: 118px; border-radius: 50%;
+    background: rgba(14,18,12,0.55); border: 1px solid rgba(196,163,90,0.45);
+    touch-action: none;
+  }
+  #touchPad .tp-knob {
+    position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px;
+    border-radius: 50%; background: rgba(196,163,90,0.55); border: 1px solid #e0c878;
+  }
+  #touchPad .tp-label {
+    position: absolute; left: 0; right: 0; bottom: 8px; text-align: center;
+    font-size: 10px; color: #b0a890; letter-spacing: .12em;
+  }
+  #touchActions {
+    pointer-events: auto; position: fixed; right: max(10px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 168px;
+  }
+  #touchActions button {
+    background: rgba(14,18,12,0.88); border: 1px solid rgba(196,163,90,0.5); color: #e0d3b8;
+    padding: 12px 8px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    min-height: 44px; touch-action: manipulation;
+  }
+  #touchActions button:active { border-color: #e0c878; background: rgba(40,36,24,0.95); }
+  #bootError {
+    display: none; position: fixed; left: 50%; top: 12px; transform: translateX(-50%);
+    z-index: 100; max-width: min(560px, 92vw); background: #3a2218; color: #f3e6c0;
+    border: 1px solid #c4a35a; border-radius: 8px; padding: 12px 16px; font-size: 13px;
+    line-height: 1.45; text-align: left; pointer-events: auto;
+  }
+  #bootError.show { display: block; }
+  #bootError code { color: #e0c878; }
+  @media (pointer: coarse) {
+    #menu button { min-height: 48px; font-size: 17px; }
+    #actionBar button, #fireBar button, #buildBar button { min-height: 40px; padding: 8px 12px; }
+    #selectedPanel { max-width: min(420px, 92vw); }
+  }
+</style>
+</head>
+<body>
+  <div id="bootError" role="alert"></div>
+  <div id="menu">
+    <div class="menuBody">
+      <h1>American Civil War Turning Point</h1>
+      <div class="sub">Gettysburg campaign. Pick a day, then your side. Ammunition is life; engineers raise breastworks; hold the points in order.</div>
+      <div class="sub" style="margin-top:8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Level</div>
+      <div class="sideBtns" id="levelBtns" style="margin-top:6px">
+        <button type="button" id="btnDay1" class="levelBtn" data-day="1" style="outline:2px solid #c4a35a;outline-offset:3px">Day 1 — July 1</button>
+        <button type="button" id="btnDay2" class="levelBtn" data-day="2">Day 2 — July 2</button>
+        <button type="button" id="btnDay3" class="levelBtn" data-day="3">Day 3 — July 3</button>
+      </div>
+      <div class="sub" style="margin-top:14px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Side</div>
+      <div class="sideBtns" style="margin-top:6px">
+        <button type="button" class="union" id="btnUnion" autofocus style="outline:2px solid #c4a35a;outline-offset:3px">Play as Union — default</button>
+        <button type="button" class="csa" id="btnCsa">Play as Confederacy (CSA)</button>
+      </div>
+      <div class="sub" style="margin-top:10px;font-size:13px"><a href="briefings.html" style="color:#c4a35a;pointer-events:auto">Preview spoken briefings</a></div>
+    </div>
+    <div class="menuStartWrap">
+      <button type="button" id="btnStart" onclick="window.__acwStart&&window.__acwStart(event)">Start</button>
+    </div>
+  </div>
+
+  <audio id="bgMusic" loop preload="auto" src="assets/music/union_yankee_doodle_fife_drum.wav"></audio>
+  <div id="game"></div>
+  <div id="selectBox"></div>
+  <div id="hud">
+    <div class="top">
+      <div class="panel" id="resources">
+        <h2>Ammunition</h2>
+        <div class="val"><span id="resAmmo">0</span></div>
+        <div class="sub">Resupply at friendly depots / wagons</div>
+        <div style="margin-top:8px;pointer-events:auto">
+          <button type="button" id="btnMute" style="background:rgba(30,36,24,.95);border:1px solid var(--border);color:var(--ink);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px">Mute Music (M)</button>
+          <button type="button" id="btnVoiceMute" style="background:rgba(30,36,24,.95);border:1px solid var(--border);color:var(--ink);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;margin-left:6px">Voice Off (V)</button>
+        </div>
+      </div>
+      <div class="panel" id="dayBanner">
+        <h2>American Civil War Turning Point</h2>
+        <div class="day" id="dayLabel">Day 1 — July 1, 1863</div>
+        <div class="obj" id="objective">—</div>
+        <div class="obj" id="objProgress" style="margin-top:6px;color:#c4a35a;font-size:13px">Objective 1/3</div>
+      </div>
+      <div class="panel" id="help">
+        <h2>Controls</h2>
+        <div>
+          <strong>LMB</strong> select · <strong>drag</strong> box · <strong>RMB</strong> orders<br/>
+          <strong>W/S</strong> forward/back · <strong>A/D</strong> pan · <strong>Q/E</strong> strafe<br/>
+          <strong>R/G</strong> rotate · <strong>Z/X</strong> or <strong>wheel</strong> zoom · <strong>edge</strong> pan<br/>
+          <strong>C</strong> fire selection · <strong>H</strong> hold/fire-at-will · <strong>F</strong> mount<br/>
+          <strong>K</strong> detach/rejoin skirmishers · <strong>B</strong> build · <strong>M</strong> music · <strong>V</strong> voice<br/>
+          <strong>Touch:</strong> tap select · drag box · long-press order · 2-finger pan/pinch
+        </div>
+      </div>
+    </div>
+    <div></div>
+    <div class="panel" id="selectedPanel">
+      <h2>Selected</h2>
+      <div id="selectedList"><span class="unitChip empty">None</span></div>
+      <div id="buildBar">
+        <button type="button" id="btnBuildWall" title="Hotkey B">Build Wall (B)</button>
+        <span id="buildHint" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div id="actionBar">
+        <button type="button" id="btnMountToggle" class="disabled" disabled title="Hotkey F — cavalry only">Dismount (F)</button>
+        <button type="button" id="btnSkirmishToggle" class="disabled" disabled title="Hotkey K — line infantry / skirmishers">Detach Skirmishers (K)</button>
+        <button type="button" id="btnFireMode" title="Hotkey H">Fire at Will (H)</button>
+      </div>
+      <div id="fireBar"></div>
+    </div>
+  </div>
+  <button type="button" id="btnSkipBarrage" style="display:none;position:fixed;left:50%;top:120px;transform:translateX(-50%);z-index:45;pointer-events:auto;background:rgba(14,18,12,.92);border:1px solid rgba(196,163,90,.5);color:#e8e2d4;padding:10px 18px;border-radius:6px;cursor:pointer;font-size:14px">Skip barrage (Space)</button>
+  <div id="status">American Civil War Turning Point — ready</div>
+
+  <script>
+    // Stub until the classic bundle loads (works on file:// and http).
+    window.__acwStart = function () { console.warn('[RTS] Start tapped before boot'); };
+    window.__acwBootOk = false;
+    window.addEventListener('error', function (e) {
+      var el = document.getElementById('bootError');
+      if (!el) return;
+      el.classList.add('show');
+      el.innerHTML = '<strong>Game failed to load.</strong><br/>' +
+        (e && e.message ? String(e.message) : 'Script error') +
+        '<br/><span style="color:#b0a890">If you opened this by double-click (file://), use <code>start_game.bat</code> / <code>start_game.command</code>, or open the hosted HTTPS link.</span>';
+    });
+    setTimeout(function () {
+      if (window.__acwBootOk) return;
+      var el = document.getElementById('bootError');
+      if (!el) return;
+      el.classList.add('show');
+      el.innerHTML = '<strong>Scripts did not boot.</strong> Day buttons / Start need JavaScript.<br/>' +
+        'Double-click <code>start_game.bat</code> (Windows) or <code>start_game.command</code> (Mac), then open the local http link — or use the hosted HTTPS URL.<br/>' +
+        '<span style="color:#b0a890">Opened as: ' + location.protocol + '//</span>';
+    }, 2500);
+  </script>
+  <!-- Single classic (non-module) bundle — file:// safe; version in filename for cache-bust -->
+  <script src="js/acw.bundle.v4.js"></script>
+  <script>
+    window.__acwBootOk = !!(window.THREE && window.RTSGame && window.__RTS__);
+    if (window.RTSTouch && RTSTouch.isTouchPreferred()) document.body.classList.add('touch-ui');
+    // Service workers are blocked on file:// — register only on http(s)
+    if (location.protocol === 'http:' || location.protocol === 'https:') {
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('./sw.js?v=acw-tp-v4').catch(function () {});
+        });
+      }
+    }
+  </script>
+</body>
+</html>
